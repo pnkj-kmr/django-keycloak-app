@@ -1,3 +1,6 @@
 *.py[co]
 venv
 .env
+keycloak
+sqlite3.db
+
