@@ -10,6 +10,10 @@ from django.conf import settings
 from django.utils.deprecation import MiddlewareMixin
 from django.shortcuts import redirect
 
+import hmac
+import hashlib
+import time
+
 from .exceptions import (
 	TokenValidationError,
 	TokenExpiredError,
@@ -245,7 +249,7 @@ class KeycloakAuthenticationMiddleware(MiddlewareMixin):
 				return False
 
 			# Import here to avoid circular imports
-			from .keycloak.client import keycloak_client
+			from .client import keycloak_client
 
 			# Refresh tokens with Keycloak
 			new_token_data = keycloak_client.refresh_access_token(refresh_token)
@@ -601,3 +605,166 @@ class KeycloakPermissionMiddleware(MiddlewareMixin):
 						)
 
 		return None
+
+
+class SecurityHeadersMiddleware(MiddlewareMixin):
+	"""
+	Add security headers to all responses
+	"""
+
+	def __init__(self, get_response):
+		self.get_response = get_response
+		super().__init__(get_response)
+
+	def __call__(self, request):
+		response = self.get_response(request)
+
+		# Content Security Policy
+		csp = [
+			"default-src 'self'",
+			"script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+			"style-src 'self' 'unsafe-inline'",
+			"img-src 'self' data: https:",
+			"font-src 'self'",
+			"connect-src 'self' " + settings.KEYCLOAK_CONFIG.get('SERVER_URL', ''),
+			"frame-ancestors 'none'",
+		]
+		response['Content-Security-Policy'] = '; '.join(csp)
+
+		# Additional security headers
+		response['X-Content-Type-Options'] = 'nosniff'
+		response['X-Frame-Options'] = 'DENY'
+		response['X-XSS-Protection'] = '1; mode=block'
+		response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+		response['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+
+		# Remove server information
+		if 'Server' in response:
+			del response['Server']
+
+		return response
+
+
+class RequestLimitingMiddleware(MiddlewareMixin):
+	"""
+	Rate limiting middleware for authentication endpoints
+	"""
+
+	def __init__(self, get_response):
+		self.get_response = get_response
+		self.redis_client = redis_manager.get_redis_client()
+		super().__init__(get_response)
+
+	def __call__(self, request):
+		# Check rate limits for sensitive endpoints
+		if self._is_sensitive_endpoint(request.path):
+			if not self._check_rate_limit(request):
+				return JsonResponse(
+					{'error': 'Rate limit exceeded', 'error_code': 'RATE_LIMITED', 'retry_after': 60}, status=429
+				)
+
+		response = self.get_response(request)
+		return response
+
+	def _is_sensitive_endpoint(self, path: str) -> bool:
+		"""Check if endpoint requires rate limiting"""
+		sensitive_paths = [
+			'/auth/login/',
+			'/auth/callback/',
+			'/auth/refresh/',
+		]
+		return any(path.startswith(p) for p in sensitive_paths)
+
+	def _check_rate_limit(self, request) -> bool:
+		"""Check if request is within rate limits"""
+		try:
+			# Get client IP
+			client_ip = self._get_client_ip(request)
+
+			# Rate limit key
+			key = f'rate_limit:{request.path}:{client_ip}'
+
+			# Check current count
+			current = self.redis_client.get(key)
+			if current is None:
+				# First request
+				self.redis_client.setex(key, 300, 1)  # 5 minutes window
+				return True
+
+			current = int(current)
+			if current >= 10:  # Max 10 requests per 5 minutes
+				return False
+
+			# Increment counter
+			self.redis_client.incr(key)
+			return True
+
+		except Exception as e:
+			logger.error(f'Rate limiting error: {e}')
+			return True  # Allow request if rate limiting fails
+
+	def _get_client_ip(self, request) -> str:
+		"""Get client IP address"""
+		x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+		if x_forwarded_for:
+			return x_forwarded_for.split(',')[0].strip()
+		return request.META.get('REMOTE_ADDR', '')
+
+
+class RequestSigningMiddleware(MiddlewareMixin):
+	"""
+	Verify request signatures for high-security API endpoints
+	"""
+
+	def __init__(self, get_response):
+		self.get_response = get_response
+		self.secret_key = settings.SECRET_KEY.encode()
+		super().__init__(get_response)
+
+	def __call__(self, request):
+		# Check signature for admin API endpoints
+		if self._requires_signature(request.path):
+			if not self._verify_signature(request):
+				return JsonResponse(
+					{'error': 'Invalid request signature', 'error_code': 'INVALID_SIGNATURE'}, status=401
+				)
+
+		response = self.get_response(request)
+		return response
+
+	def _requires_signature(self, path: str) -> bool:
+		"""Check if endpoint requires request signing"""
+		signed_paths = [
+			'/auth/admin/',
+			'/auth/invalidate-session/',
+		]
+		return any(path.startswith(p) for p in signed_paths)
+
+	def _verify_signature(self, request) -> bool:
+		"""Verify request signature"""
+		try:
+			# Get signature from header
+			signature = request.META.get('HTTP_X_SIGNATURE')
+			timestamp = request.META.get('HTTP_X_TIMESTAMP')
+
+			if not signature or not timestamp:
+				return False
+
+			# Check timestamp (5 minute window)
+			current_time = int(time.time())
+			request_time = int(timestamp)
+			if abs(current_time - request_time) > 300:
+				return False
+
+			# Build message to sign
+			message = f'{request.method}:{request.path}:{timestamp}:{request.body.decode()}'
+
+			# Calculate expected signature
+			expected_signature = hmac.new(self.secret_key, message.encode(), hashlib.sha256).hexdigest()
+
+			# Compare signatures
+			return hmac.compare_digest(signature, expected_signature)
+
+		except Exception as e:
+			logger.error(f'Signature verification error: {e}')
+			return False
