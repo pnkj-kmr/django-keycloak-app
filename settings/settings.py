@@ -40,6 +40,10 @@ INSTALLED_APPS = [
 	'django.contrib.messages',
 	'django.contrib.staticfiles',
 	'django.contrib.sites',
+	# restful app binding
+	'corsheaders',
+	'rest_framework',
+	# 'rest_framework.authtoken',
 	#
 	# added new app here
 	'app.user_keycloak',
@@ -47,11 +51,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
 	'django.middleware.security.SecurityMiddleware',
+	'corsheaders.middleware.CorsMiddleware',
 	'django.contrib.sessions.middleware.SessionMiddleware',
 	'django.middleware.common.CommonMiddleware',
 	'django.middleware.csrf.CsrfViewMiddleware',
 	# 'django.contrib.auth.middleware.AuthenticationMiddleware',
 	'app.user_keycloak.middleware.KeycloakAuthenticationMiddleware',
+	'app.user_keycloak.middleware.SecurityHeadersMiddleware',
 	#
 	'django.contrib.messages.middleware.MessageMiddleware',
 	'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -116,6 +122,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# Static files
+# STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -124,6 +138,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 #######
 ##
+
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=lambda v: [s.strip() for s in v.split(',')])
+CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = [
+	'X-Token-Expires-In',
+	'X-Token-Refresh-Hint',
+	'X-User-ID',
+	'X-User-Roles',
+]
 
 
 TEMPLATES = [
@@ -143,6 +166,79 @@ TEMPLATES = [
 	},
 ]
 
+REST_FRAMEWORK = {
+	'DEFAULT_AUTHENTICATION_CLASSES': [
+		'app.user_keycloak.authentication.KeycloakAuthentication',
+	],
+	'DEFAULT_PERMISSION_CLASSES': [
+		'rest_framework.permissions.IsAuthenticated',
+	],
+	'DEFAULT_RENDERER_CLASSES': [
+		'rest_framework.renderers.JSONRenderer',
+	],
+	'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+	'PAGE_SIZE': 20,
+	'DEFAULT_THROTTLE_CLASSES': [
+		'rest_framework.throttling.AnonRateThrottle',
+		'rest_framework.throttling.UserRateThrottle',
+	],
+	'DEFAULT_THROTTLE_RATES': {'anon': '100/hour', 'user': '1000/hour'},
+}
+
+
+# # Logging Configuration
+# LOGGING = {
+# 	'version': 1,
+# 	'disable_existing_loggers': False,
+# 	'formatters': {
+# 		'verbose': {
+# 			'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+# 			'style': '{',
+# 		},
+# 		'json': {
+# 			'()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+# 			'format': '%(asctime)s %(name)s %(levelname)s %(message)s',
+# 		},
+# 	},
+# 	'handlers': {
+# 		'console': {
+# 			'class': 'logging.StreamHandler',
+# 			'formatter': 'verbose',
+# 		},
+# 		'file': {
+# 			'class': 'logging.handlers.RotatingFileHandler',
+# 			'filename': 'logs/django.log',
+# 			'maxBytes': 1024 * 1024 * 10,  # 10MB
+# 			'backupCount': 5,
+# 			'formatter': 'json',
+# 		},
+# 		'security': {
+# 			'class': 'logging.handlers.RotatingFileHandler',
+# 			'filename': 'logs/security.log',
+# 			'maxBytes': 1024 * 1024 * 10,
+# 			'backupCount': 10,
+# 			'formatter': 'json',
+# 		},
+# 	},
+# 	'loggers': {
+# 		'keycloak_auth': {
+# 			'handlers': ['console', 'file'],
+# 			'level': 'INFO',
+# 			'propagate': False,
+# 		},
+# 		'security': {
+# 			'handlers': ['console', 'security'],
+# 			'level': 'WARNING',
+# 			'propagate': False,
+# 		},
+# 		'django.security': {
+# 			'handlers': ['security'],
+# 			'level': 'WARNING',
+# 			'propagate': False,
+# 		},
+# 	},
+# }
+
 
 # AUTHENTICATION_BACKENDS = [
 # 	'django.contrib.auth.backends.ModelBackend',
@@ -159,52 +255,82 @@ MIGRATION_MODULES = {
 	# 'contenttypes': None,  # Optional: remove if you don't need content types
 }
 
+REST_FRAMEWORK = {
+	'DEFAULT_AUTHENTICATION_CLASSES': [
+		'app.user_keycloak.authentication.KeycloakAuthentication',
+	],
+	'DEFAULT_PERMISSION_CLASSES': [
+		'rest_framework.permissions.IsAuthenticated',
+	],
+	'DEFAULT_RENDERER_CLASSES': [
+		'rest_framework.renderers.JSONRenderer',
+	],
+	'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+	'PAGE_SIZE': 20,
+	'DEFAULT_THROTTLE_CLASSES': [
+		'rest_framework.throttling.AnonRateThrottle',
+		'rest_framework.throttling.UserRateThrottle',
+	],
+	'DEFAULT_THROTTLE_RATES': {'anon': '100/hour', 'user': '1000/hour'},
+}
+
 
 REDIS_HOST = config('REDIS_HOST', default='127.0.0.1')
 REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
 REDIS_PASSWORD = config('REDIS_PASSWORD', default='Infra0n')
-REDIS_DB_DEFAULT = config('REDIS_DB_DEFAULT', default=0, cast=int)
 REDIS_SSL = config('REDIS_SSL', default=False, cast=bool)
-# REDIS_DB_DEFAULT=0
-# REDIS_DB_SESSIONS=0
+REDIS_DB_DEFAULT = config('REDIS_DB_DEFAULT', default=0, cast=int)
+REDIS_DB_SESSIONS = config('REDIS_DB_SESSIONS', default=0, cast=int)
 
 
-# Redis Cache Configuration
+def build_redis_url(db=1):
+	protocol = 'rediss' if REDIS_SSL else 'redis'
+	if REDIS_PASSWORD:
+		return f'{protocol}://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{db}'
+	return f'{protocol}://{REDIS_HOST}:{REDIS_PORT}/{db}'
+
+
+# Production Redis with Clustering Support
 CACHES = {
 	'default': {
 		'BACKEND': 'django_redis.cache.RedisCache',
-		'LOCATION': 'redis://127.0.0.1:6379/1',
+		'LOCATION': [
+			build_redis_url(REDIS_DB_DEFAULT),
+			# Add more Redis nodes for clustering
+			# f"{protocol}://:{REDIS_PASSWORD}@redis-node-2:6379/{REDIS_DB_DEFAULT}",
+			# f"{protocol}://:{REDIS_PASSWORD}@redis-node-3:6379/{REDIS_DB_DEFAULT}",
+		],
+		'OPTIONS': {
+			'CLIENT_CLASS': 'django_redis.client.ShardClient',
+			'CONNECTION_POOL_KWARGS': {
+				'max_connections': 100,
+				'retry_on_timeout': True,
+				'socket_keepalive': True,
+				'socket_keepalive_options': {},
+				'health_check_interval': 30,
+				'socket_connect_timeout': 5,
+				'socket_timeout': 5,
+			},
+			'SERIALIZER': 'django_redis.serializers.json.JSONSerializer',
+			'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+			'IGNORE_EXCEPTIONS': False,
+		},
+		'KEY_PREFIX': 'keycloak_prod',
+		'TIMEOUT': 1800,  # 30 minutes
+		'VERSION': 1,
+	},
+	'sessions': {
+		'BACKEND': 'django_redis.cache.RedisCache',
+		'LOCATION': build_redis_url(REDIS_DB_SESSIONS),
 		'OPTIONS': {
 			'CLIENT_CLASS': 'django_redis.client.DefaultClient',
 			'CONNECTION_POOL_KWARGS': {
 				'max_connections': 50,
 				'retry_on_timeout': True,
-				'socket_keepalive': True,
-				'socket_keepalive_options': {},
 			},
-			'SERIALIZER': 'django_redis.serializers.json.JSONSerializer',
-			'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
-			'IGNORE_EXCEPTIONS': False,  # Fail fast if Redis is down
-			'PASSWORD': 'Infra0n',
 		},
-		'KEY_PREFIX': 'user_keycloak',
-		'TIMEOUT': 3600,  # 1 hour default timeout
-		'VERSION': 1,
-	},
-	# Separate cache for sessions (optional but recommended)
-	'sessions': {
-		'BACKEND': 'django_redis.cache.RedisCache',
-		'LOCATION': 'redis://127.0.0.1:6379/2',
-		'OPTIONS': {
-			'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-			'CONNECTION_POOL_KWARGS': {
-				'max_connections': 30,
-				'retry_on_timeout': True,
-			},
-			'PASSWORD': 'Infra0n',
-		},
-		'KEY_PREFIX': 'keycloak_sessions',
-		'TIMEOUT': 3600,
+		'KEY_PREFIX': 'keycloak_sessions_prod',
+		'TIMEOUT': 1800,
 	},
 }
 
@@ -220,27 +346,28 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_NAME = 'keycloak_sessionid'  # Custom session cookie name
 
 
-# settings.py
-
 # Keycloak Configuration
+KEYCLOAK_SERVER_URL = config('KEYCLOAK_SERVER_URL', default='http://localhost:8080')
+KEYCLOAK_REALM = config('KEYCLOAK_REALM', default='django-app')
+KEYCLOAK_CLIENT_ID = config('KEYCLOAK_CLIENT_ID', default='django-client')
+KEYCLOAK_CLIENT_SECRET = config('KEYCLOAK_CLIENT_SECRET', default='90h0rc6VZhHE7VfPAvJjq61A96UvOM9rjsndkjsd')
+
 KEYCLOAK_CONFIG = {
-	# Basic Keycloak Server Settings
-	'SERVER_URL': 'http://localhost:8081',
-	'REALM': 'django-app',
-	'CLIENT_ID': 'django-client',
-	'CLIENT_SECRET': '90h0rc6VZhHE7VfPAvJjq61A96UvOM9r',  # Replace with actual secret from Keycloak
-	# OpenID Connect Endpoints
-	'AUTHORIZATION_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/auth',
-	'TOKEN_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/token',
-	'USERINFO_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/userinfo',
-	'JWKS_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/certs',
-	'LOGOUT_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/logout',
-	'INTROSPECT_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/token/introspect',
+	'SERVER_URL': KEYCLOAK_SERVER_URL,
+	'REALM': KEYCLOAK_REALM,
+	'CLIENT_ID': KEYCLOAK_CLIENT_ID,
+	'CLIENT_SECRET': KEYCLOAK_CLIENT_SECRET,
+	'AUTHORIZATION_URL': f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/auth',
+	'TOKEN_URL': f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token',
+	'USERINFO_URL': f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/userinfo',
+	'JWKS_URL': f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/certs',
+	'LOGOUT_URL': f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/logout',
+	'INTROSPECT_URL': f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token/introspect',
 	# JWT Token Settings
 	'ALGORITHMS': ['RS256'],
 	'AUDIENCE': None,
 	#  'AUDIENCE': 'django-client',
-	'ISSUER': 'http://localhost:8081/realms/django-app',
+	'ISSUER': f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}',
 	# Token Lifetime Settings
 	'ACCESS_TOKEN_LIFETIME': 15 * 60,  # 15 minutes
 	'REFRESH_TOKEN_LIFETIME': 24 * 60 * 60,  # 24 hours
