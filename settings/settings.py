@@ -34,21 +34,15 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
-	'django.contrib.admin',
-	'django.contrib.auth',
+	# 'django.contrib.admin',
 	'django.contrib.contenttypes',
 	'django.contrib.sessions',
 	'django.contrib.messages',
 	'django.contrib.staticfiles',
 	'django.contrib.sites',
-	# auth apps from package
-	'allauth',
-	'allauth.account',
-	'allauth.socialaccount',
-	'allauth.socialaccount.providers.openid_connect',
-	# custom api
-	'api',
-	'mongoengine',
+	#
+	# added new app here
+	'app.user_keycloak',
 ]
 
 MIDDLEWARE = [
@@ -56,28 +50,29 @@ MIDDLEWARE = [
 	'django.contrib.sessions.middleware.SessionMiddleware',
 	'django.middleware.common.CommonMiddleware',
 	'django.middleware.csrf.CsrfViewMiddleware',
-	'django.contrib.auth.middleware.AuthenticationMiddleware',
+	# 'django.contrib.auth.middleware.AuthenticationMiddleware',
+	'app.user_keycloak.middleware.KeycloakAuthenticationMiddleware',
+	#
 	'django.contrib.messages.middleware.MessageMiddleware',
 	'django.middleware.clickjacking.XFrameOptionsMiddleware',
-	'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'infraon.urls'
 
-TEMPLATES = [
-	{
-		'BACKEND': 'django.template.backends.django.DjangoTemplates',
-		'DIRS': [BASE_DIR / 'templates'],
-		'APP_DIRS': True,
-		'OPTIONS': {
-			'context_processors': [
-				'django.template.context_processors.request',
-				'django.contrib.auth.context_processors.auth',
-				'django.contrib.messages.context_processors.messages',
-			],
-		},
-	},
-]
+# TEMPLATES = [
+# 	{
+# 		'BACKEND': 'django.template.backends.django.DjangoTemplates',
+# 		'DIRS': [BASE_DIR / 'templates'],
+# 		'APP_DIRS': True,
+# 		'OPTIONS': {
+# 			'context_processors': [
+# 				'django.template.context_processors.request',
+# 				# 'django.contrib.auth.context_processors.auth',
+# 				'django.contrib.messages.context_processors.messages',
+# 			],
+# 		},
+# 	},
+# ]
 
 WSGI_APPLICATION = 'infraon.wsgi.application'
 
@@ -104,30 +99,6 @@ DATABASES = {
 	}
 }
 
-AUTHENTICATION_BACKENDS = [
-	'django.contrib.auth.backends.ModelBackend',
-	'allauth.account.auth_backends.AuthenticationBackend',
-]
-
-
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
-
-AUTH_PASSWORD_VALIDATORS = [
-	{
-		'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-	},
-	{
-		'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-	},
-	{
-		'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-	},
-	{
-		'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-	},
-]
-
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -151,41 +122,140 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
-SITE_ID = 1
-
-
-# Allauth settings
-ACCOUNT_LOGIN_METHODS = {'email'}
-ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
-
-ACCOUNT_EMAIL_VERIFICATION = 'none'
-LOGIN_REDIRECT_URL = '/api/'
-LOGOUT_REDIRECT_URL = '/api/'
-SOCIALACCOUNT_AUTO_SIGNUP = True
-SOCIALACCOUNT_EMAIL_VERIFICATION = 'none'
+#######
+##
 
 
-# KEYCLOAK_SERVER_URL=http://localhost:8081
-# KEYCLOAK_REALM=django
-# KEYCLOAK_CLIENT_ID=django-client
-# KEYCLOAK_CLIENT_SECRET=bhhug3Xkpep2cvkGdgopYv4eJKxWh9XS
-SOCIALACCOUNT_PROVIDERS = {
-	'openid_connect': {
-		'APPS': [
-			{
-				'provider_id': 'keycloak',
-				'name': 'Keycloak',
-				'client_id': config('KEYCLOAK_CLIENT_ID', default='django-client'),
-				'secret': config('KEYCLOAK_CLIENT_SECRET', default='bhhug3Xkpep2cvkGdgopYv4eJKxWh9XS'),
-				# 'settings': {
-				# 	'server_url': config('KEYCLOAK_SERVER_URL', default='http://localhost:8081'),
-				# 	'realm_name': config('KEYCLOAK_REALM', default='django'),
-				# },
-				'settings': {
-					'server_url': f'{config("KEYCLOAK_SERVER_URL", default="http://localhost:8080")}/realms/{config("KEYCLOAK_REALM", default="master")}',  # noqa: E501
-				},
-			}
-		]
-	}
+TEMPLATES = [
+	{
+		'BACKEND': 'django.template.backends.django.DjangoTemplates',
+		'DIRS': [BASE_DIR / 'templates'],
+		'APP_DIRS': True,
+		'OPTIONS': {
+			'context_processors': [
+				'django.template.context_processors.debug',
+				'django.template.context_processors.request',
+				'django.contrib.messages.context_processors.messages',
+				# Add Keycloak context processor
+				'app.user_keycloak.context_processors.keycloak_auth',
+			],
+		},
+	},
+]
+
+
+# AUTHENTICATION_BACKENDS = [
+# 	'django.contrib.auth.backends.ModelBackend',
+# ]
+
+# Custom Authentication Backend
+AUTHENTICATION_BACKENDS = [
+	'app.user_keycloak.auth_backends.KeycloakAuthenticationBackend',
+]
+
+
+MIGRATION_MODULES = {
+	'auth': None,
+	# 'contenttypes': None,  # Optional: remove if you don't need content types
+}
+
+
+REDIS_HOST = config('REDIS_HOST', default='127.0.0.1')
+REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
+REDIS_PASSWORD = config('REDIS_PASSWORD', default='Infra0n')
+REDIS_DB_DEFAULT = config('REDIS_DB_DEFAULT', default=0, cast=int)
+REDIS_SSL = config('REDIS_SSL', default=False, cast=bool)
+# REDIS_DB_DEFAULT=0
+# REDIS_DB_SESSIONS=0
+
+
+# Redis Cache Configuration
+CACHES = {
+	'default': {
+		'BACKEND': 'django_redis.cache.RedisCache',
+		'LOCATION': 'redis://127.0.0.1:6379/1',
+		'OPTIONS': {
+			'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+			'CONNECTION_POOL_KWARGS': {
+				'max_connections': 50,
+				'retry_on_timeout': True,
+				'socket_keepalive': True,
+				'socket_keepalive_options': {},
+			},
+			'SERIALIZER': 'django_redis.serializers.json.JSONSerializer',
+			'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+			'IGNORE_EXCEPTIONS': False,  # Fail fast if Redis is down
+			'PASSWORD': 'Infra0n',
+		},
+		'KEY_PREFIX': 'user_keycloak',
+		'TIMEOUT': 3600,  # 1 hour default timeout
+		'VERSION': 1,
+	},
+	# Separate cache for sessions (optional but recommended)
+	'sessions': {
+		'BACKEND': 'django_redis.cache.RedisCache',
+		'LOCATION': 'redis://127.0.0.1:6379/2',
+		'OPTIONS': {
+			'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+			'CONNECTION_POOL_KWARGS': {
+				'max_connections': 30,
+				'retry_on_timeout': True,
+			},
+			'PASSWORD': 'Infra0n',
+		},
+		'KEY_PREFIX': 'keycloak_sessions',
+		'TIMEOUT': 3600,
+	},
+}
+
+# Redis Session Configuration
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'sessions'  # Use dedicated sessions cache
+SESSION_COOKIE_AGE = 3600  # 1 hour
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_NAME = 'keycloak_sessionid'  # Custom session cookie name
+
+
+# settings.py
+
+# Keycloak Configuration
+KEYCLOAK_CONFIG = {
+	# Basic Keycloak Server Settings
+	'SERVER_URL': 'http://localhost:8081',
+	'REALM': 'django-app',
+	'CLIENT_ID': 'django-client',
+	'CLIENT_SECRET': '90h0rc6VZhHE7VfPAvJjq61A96UvOM9r',  # Replace with actual secret from Keycloak
+	# OpenID Connect Endpoints
+	'AUTHORIZATION_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/auth',
+	'TOKEN_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/token',
+	'USERINFO_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/userinfo',
+	'JWKS_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/certs',
+	'LOGOUT_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/logout',
+	'INTROSPECT_URL': 'http://localhost:8081/realms/django-app/protocol/openid-connect/token/introspect',
+	# JWT Token Settings
+	'ALGORITHMS': ['RS256'],
+	'AUDIENCE': None,
+	#  'AUDIENCE': 'django-client',
+	'ISSUER': 'http://localhost:8081/realms/django-app',
+	# Token Lifetime Settings
+	'ACCESS_TOKEN_LIFETIME': 15 * 60,  # 15 minutes
+	'REFRESH_TOKEN_LIFETIME': 24 * 60 * 60,  # 24 hours
+	# JWT Validation Settings
+	'VERIFY_SIGNATURE': True,
+	'VERIFY_EXP': True,
+	'VERIFY_AUD': True,
+	'VERIFY_ISS': True,
+	'LEEWAY': 10,  # 10 seconds leeway for clock skew
+	# OAuth2 Settings
+	'SCOPE': 'openid profile email',
+	'RESPONSE_TYPE': 'code',
+	'GRANT_TYPE': 'authorization_code',
+	# Redis-specific caching settings
+	'CACHE_JWKS': True,  # Cache Keycloak public keys
+	'JWKS_CACHE_TIMEOUT': 3600,  # Cache JWKS for 1 hour
+	'USER_INFO_CACHE_TIMEOUT': 300,  # Cache user info for 5 minutes
 }
