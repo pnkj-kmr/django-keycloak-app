@@ -1,10 +1,10 @@
 Django==5.2.4
 django-cors-headers==4.7.0
+django-redis==6.0.0
 djangorestframework==3.16.0
 PyJWT==2.10.1
 python-decouple==3.8
 python-jose==3.5.0
+redis==6.2.0
 requests==2.32.4
-django-redis
-redis
 

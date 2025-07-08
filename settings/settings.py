@@ -97,7 +97,7 @@ mongoengine.connect(
 DATABASES = {
 	'default': {
 		'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
-		'NAME': config('DB_NAME', default='django_db'),
+		'NAME': config('DB_NAME', default='django_no_auth_db'),
 		'USER': config('DB_USER', default='postgres'),
 		'PASSWORD': config('DB_PASSWORD', default=''),
 		'HOST': config('DB_HOST', default='localhost'),
