@@ -1,0 +1,9 @@
+# Validate a JWT token
+python manage.py validate_keycloak_token <token>
+
+# Check system health
+python manage.py check_keycloak_health
+
+# Cleanup cache
+python manage.py cleanup_keycloak_cache --expired-only
+
